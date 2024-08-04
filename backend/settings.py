@@ -25,7 +25,11 @@ SECRET_KEY = 'django-insecure-1ugj5=_0bef56_0-i+(_+9myq(-2(8(uv$u6iwc95@khj%v@(-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    '.ngrok-free.app',
+]
 
 
 # Application definition
@@ -40,6 +44,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'users',
+    #'channels',
 ]
 
 MIDDLEWARE = [
@@ -159,3 +164,5 @@ CORS_ALLOW_CREDENTIALS = True
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
 )
+
+

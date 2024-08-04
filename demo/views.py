@@ -2,10 +2,15 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from twilio.twiml.voice_response import VoiceResponse
-from llm import LlmClient
-from twilio_service import TwilioClient
+from .llm import LlmClient
+from .twilio_service import TwilioClient
 import json
 import asyncio
+from django.http import HttpResponse
+
+def demo_home(request):
+    return HttpResponse("Welcome to the Demo Home Page!")
+
 
 twilio_client = TwilioClient()
 
