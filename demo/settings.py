@@ -28,3 +28,16 @@ CHANNEL_LAYERS = {
 INSTALLED_APPS = [
     'channels',
 ]
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],  # This can be empty or include additional directories
+        'APP_DIRS': True,  # This should be True
+        'OPTIONS': {
+            'context_processors': [
+                ...
+            ],
+        },
+    },
+]
