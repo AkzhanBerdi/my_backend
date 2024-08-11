@@ -8,6 +8,9 @@ from rest_framework.views import APIView
 from rest_framework import status
 from django.middleware.csrf import get_token
 from django.http import JsonResponse, HttpResponse
+from rest_framework.authtoken.models import Token
+
+from rest_framework.permissions import IsAuthenticated
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -18,27 +21,18 @@ class RegisterView(generics.CreateAPIView):
         user.set_password(user.password)
         user.save()
         
-
 class LoginView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             username = serializer.validated_data['username']
             password = serializer.validated_data['password']
-
-            print(f'Received username: {username}')
-            print(f'Received password: {password}')
-
-            # Authenticate the user
             user = authenticate(username=username, password=password)
-            if user is not None:
-                print('User is not None')
+            if user:
                 login(request, user)
-                return Response({'detail': 'Logged in successfully'}, status=status.HTTP_200_OK)
-            else:
-                print('User is None')
-                return Response({'detail': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                token, _ = Token.objects.get_or_create(user=user)
+                return Response({'token': token.key}, status=status.HTTP_200_OK)
+        return Response({'error': 'Invalid Credentials'}, status=status.HTTP_400_BAD_REQUEST)
 
     def get(self, request):
         username = request.query_params.get('username')
@@ -56,3 +50,11 @@ class LogoutView(APIView):
 
 def csrf_token_view(request):
     return JsonResponse({'csrfToken': get_token(request)})
+
+
+class CurrentUserView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)

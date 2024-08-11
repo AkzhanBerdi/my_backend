@@ -46,45 +46,54 @@ def handle_twilio_voice_webhook(request, agent_id_path=settings.RETELL_AGENT_ID)
 
 @csrf_exempt
 def initiate_call(request):
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        to_number = data.get('phone_number')
-        from_number = settings.PHONE_NUM_OUT
-        
-        logger.info(f"Initiating call from {from_number} to {to_number}")
-        
-        try:
-            retell_response = register_call_with_retell(settings.RETELL_AGENT_ID, {
-                'To': to_number,
-                'From': from_number,
-            })
-            logger.info(f"Retell response: {retell_response}")
-            
-            twiml = VoiceResponse()
-            # dial = twiml.dial(timeout=30)
-            # dial.number(to_number)
-            twiml.connect().stream(url=f"wss://api.retellai.com/audio-websocket/{retell_response['call_id']}")
-            twiml.say("The call could not be completed. Please try again later.")
-
-            # Fix the status callback URL
-            status_callback_url = f"https://{settings.NGROK_IP_ADDRESS}/api/demo/call-status-callback/"
-            
-            call = twilio_client.client.calls.create(
-                to=to_number,
-                from_=from_number,
-                twiml=str(twiml),
-                status_callback=status_callback_url,
-                status_callback_event=['initiated', 'ringing', 'answered', 'completed']
-            )
-            logger.info(f"Twilio call initiated with SID: {call.sid}")
-            
-            return JsonResponse({'status': 'success', 'message': 'Call initiated', 'call_sid': call.sid})
-            #return HttpResponse("response", content_type='text/plain')
-        except Exception as e:
-            logger.error(f"Error initiating call: {str(e)}")
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Invalid request method'}, status=400)
     
-    return JsonResponse({'error': 'Invalid request method'}, status=405)
+    try:
+        data = json.loads(request.body)
+        to_number = data.get('to_number')
+        
+        if not to_number:
+            return JsonResponse({'error': 'Missing to_number in request'}, status=400)
+
+        from_number = settings.PHONE_NUM_OUT
+        agent_id = settings.RETELL_AGENT_ID
+
+        logger.info(f"Initiating call to {to_number} from {from_number}")
+       
+        retell_response = register_call_with_retell(agent_id, {
+            'To': to_number,
+            'From': from_number,
+        })
+        
+        if not retell_response or 'call_id' not in retell_response:
+            logger.error(f"Failed to register call with Retell: {retell_response}")
+            return JsonResponse({'error': 'Failed to register call with Retell'}, status=500)
+
+        retell_call_id = retell_response['call_id']
+        
+        twiml = VoiceResponse()
+        twiml.connect().stream(url=f"wss://api.retellai.com/audio-websocket/{retell_call_id}/")
+       
+        call = twilio_client.client.calls.create(
+            to=to_number,
+            from_=from_number,
+            twiml=str(twiml)
+        )
+        
+        logger.info(f"Call initiated with SID: {call.sid}")
+        logger.info(f"TwiML used: {str(twiml)}")
+
+        return JsonResponse({
+            'status': 'Call initiated',
+            'call_sid': call.sid,
+            'retell_call_id': retell_call_id
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON in request body'}, status=400)
+    except Exception as e:
+        logger.error(f"Error in initiate_call: {e}", exc_info=True)
+        return JsonResponse({'error': f'Failed to initiate call: {str(e)}'}, status=500)
 
 def register_call_with_retell(agent_id_path, twilio_data):
     try:

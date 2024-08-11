@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'users',
     'demo',
     'channels',
+    'rest_framework.authtoken',
 ]
 
 MIDDLEWARE = [
@@ -156,4 +157,11 @@ LOGGING = {
             'propagate': True,
         },
     },
+}
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
 }
