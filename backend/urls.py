@@ -5,6 +5,6 @@ from django.shortcuts import redirect
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/users/', include('users.urls')),
-    path('demo/', include('demo.urls')),
-    path('', lambda request: redirect('demo/')),
+    path('api/demo/', include('demo.urls')),  # Note the trailing slash
+    path('', lambda request: redirect('api/demo/')),
 ]

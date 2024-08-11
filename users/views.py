@@ -6,7 +6,8 @@ from .serializers import UserSerializer, LoginSerializer
 
 from rest_framework.views import APIView
 from rest_framework import status
-
+from django.middleware.csrf import get_token
+from django.http import JsonResponse, HttpResponse
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -52,3 +53,6 @@ class LogoutView(APIView):
     def post(self, request, *args, **kwargs):
         logout(request)
         return Response({'detail': 'Logged out successfully'}, status=status.HTTP_200_OK)
+
+def csrf_token_view(request):
+    return JsonResponse({'csrfToken': get_token(request)})
