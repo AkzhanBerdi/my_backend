@@ -6,4 +6,5 @@ urlpatterns = [
     path('initiate-call/', views.initiate_call, name='initiate_call'),
     path('csrf-token/', views.csrf_token_view, name='csrf-token'),
     path('call-status-callback/', views.call_status_callback, name='call_status_callback'),
+    path('create-agent/', views.CreateRetellAgentView.as_view(), name='create_agent'),
 ]

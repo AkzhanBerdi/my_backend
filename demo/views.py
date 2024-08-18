@@ -1,14 +1,25 @@
 import json
 import logging
 import requests
+
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
-from twilio.twiml.voice_response import VoiceResponse
-from .twilio_service import twilio_client
 from django.middleware.csrf import get_token
 
+from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+from .models import RetellAgent
+from .serializers import RetellAgentSerializer
+
+from .twilio_service import twilio_client
+from twilio.twiml.voice_response import VoiceResponse
+
+
 logger = logging.getLogger(__name__)
+
 
 @csrf_exempt
 def handle_twilio_voice_webhook(request, agent_id_path=settings.RETELL_AGENT_ID):
@@ -43,6 +54,7 @@ def handle_twilio_voice_webhook(request, agent_id_path=settings.RETELL_AGENT_ID)
     except Exception as err:
         logger.error(f"An unexpected error occurred: {err}", exc_info=True)
         return JsonResponse({'message': 'Internal Server Error'}, status=500)
+
 
 @csrf_exempt
 def initiate_call(request):
@@ -95,6 +107,7 @@ def initiate_call(request):
         logger.error(f"Error in initiate_call: {e}", exc_info=True)
         return JsonResponse({'error': f'Failed to initiate call: {str(e)}'}, status=500)
 
+
 def register_call_with_retell(agent_id_path, twilio_data):
     try:
         url = "https://api.retellai.com/register-call"
@@ -136,8 +149,10 @@ def register_call_with_retell(agent_id_path, twilio_data):
         logger.error(f"Unexpected error in register_call_with_retell: {str(e)}", exc_info=True)
         return None
 
+
 def csrf_token_view(request):
     return JsonResponse({'csrfToken': get_token(request)})
+
 
 @csrf_exempt
 def call_status_callback(request):
@@ -151,3 +166,76 @@ def call_status_callback(request):
         logger.error(f"Call error: Code {error_code}, Message: {error_message}")
     logger.debug(f"Full callback data: {request.POST}")
     return HttpResponse(status=200)
+
+
+class CreateRetellAgentView(APIView):
+    def post(self, request):
+        logger.info("Received request to create Retell agent")
+        logger.debug(f"Request data: {request.data}")
+        
+        serializer = RetellAgentSerializer(data=request.data)
+        if serializer.is_valid():
+            logger.info("Serializer is valid")
+            
+            # Prepare data for Retell API
+            retell_data = {
+                "name": serializer.validated_data['name'],
+                "llm_websocket_url": f"wss://{settings.NGROK_IP_ADDRESS}/ws/llm/",
+                "voice_id": "openai-Alloy",
+                "accent": serializer.validated_data.get('accent'),
+                "gender": serializer.validated_data.get('gender'),
+                "speech_style": serializer.validated_data.get('speech_style'),
+                "language": "en-US",
+                "ambient_sound": None,
+                "responsiveness": 1,
+                "interruption_sensitivity": 1,
+                "voice_speed": 1,
+                "voice_temperature": 1,
+            }
+            logger.debug(f"Prepared Retell data: {retell_data}")
+
+            # Make request to Retell API
+            headers = {
+                "Authorization": f"Bearer {settings.RETELL_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            try:
+                logger.info("Sending request to Retell API")
+                response = requests.post(
+                    "https://api.retellai.com/create-agent",
+                    json=retell_data,
+                    headers=headers
+                )
+                
+                logger.info(f"Retell API Response Status: {response.status_code}")
+                logger.info(f"Retell API Response Headers: {response.headers}")
+                logger.info(f"Retell API Response Body: {response.text}")
+                
+                if response.status_code == 422:
+                    error_message = json.loads(response.text).get('error_message', 'Unknown error')
+                    return Response({"error": f"Retell API Error: {error_message}"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                response.raise_for_status()
+                retell_response = response.json()
+                
+                if 'agent_id' not in retell_response:  # Changed from 'id' to 'agent_id'
+                    logger.error(f"Agent ID not found in Retell response: {retell_response}")
+                    return Response({"error": "Agent ID not found in Retell response"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+                # Save agent to database
+                logger.info("Saving agent to database")
+                agent = serializer.save(retell_agent_id=retell_response['agent_id'])  # Changed from 'id' to 'agent_id'
+                logger.info(f"Agent saved with ID: {agent.id}")
+                
+                return Response({
+                    "message": "Agent created successfully",
+                    "agent_id": agent.retell_agent_id,
+                    "agent_data": RetellAgentSerializer(agent).data
+                }, status=status.HTTP_201_CREATED)
+            except requests.RequestException as e:
+                logger.error(f"Error calling Retell API: {str(e)}")
+                logger.error(f"Retell API response: {e.response.text if e.response else 'No response'}")
+                return Response({"error": f"Failed to create agent with Retell: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            logger.error(f"Serializer errors: {serializer.errors}")
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
